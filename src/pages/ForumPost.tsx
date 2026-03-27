@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Send, Loader2, Shield } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase, type ForumPost, type ForumReply } from '../lib/supabase'
+import { supabase, type ForumPostWithProfile, type ForumReplyWithProfile } from '../lib/supabase'
 import { timeAgo, cn } from '../lib/utils'
 import { toast } from 'sonner'
 
@@ -10,8 +10,8 @@ export default function ForumPostPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { profile, isAdmin } = useAuth()
-  const [post, setPost] = useState<ForumPost | null>(null)
-  const [replies, setReplies] = useState<ForumReply[]>([])
+  const [post, setPost] = useState<ForumPostWithProfile | null>(null)
+  const [replies, setReplies] = useState<ForumReplyWithProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
@@ -20,12 +20,22 @@ export default function ForumPostPage() {
 
   async function fetchPost() {
     if (!id) return
-    const [{ data: postData }, { data: replyData }] = await Promise.all([
+    const [
+  { data: postData, error: postError },
+  { data: replyData, error: replyError }
+] = await Promise.all([
+  supabase.from('forum_posts').select('*, profiles(full_name, avatar_color)').eq('id', id).single(),
+  supabase.from('forum_replies').select('*, profiles(full_name, avatar_color)').eq('post_id', id).order('created_at')
+])
+
+if (postError || replyError) {
+  console.error(postError || replyError)
+}
       supabase.from('forum_posts').select('*, profiles(full_name, avatar_color)').eq('id', id).single(),
       supabase.from('forum_replies').select('*, profiles(full_name, avatar_color)').eq('post_id', id).order('created_at')
     ])
-    setPost(postData as ForumPost)
-    setReplies(replyData as ForumReply[] || [])
+    setPost(postData as ForumPostWithProfile)
+    setReplies((replyData as ForumReplyWithProfile[]) || [])
     setLoading(false)
   }
 
@@ -54,7 +64,7 @@ export default function ForumPostPage() {
     </div>
   )
 
-  const postAuthor = (post.profiles as any)
+  const postAuthor = post.profiles
   const CATEGORY_COLORS: Record<string, string> = {
     general: '#3b82f6', help: '#8b5cf6', feedback: '#10b981',
     announcements: '#e9ae34', 'study-tips': '#f97316'
@@ -90,7 +100,7 @@ export default function ForumPostPage() {
       <div className="space-y-3 mb-6">
         <h2 className="font-bold font-display" style={{ color: 'var(--text-primary)' }}>{replies.length} Replies</h2>
         {replies.map(r => {
-          const author = (r.profiles as any)
+          const author = r.profiles
           return (
             <div key={r.id} className={cn('rounded-2xl p-4', r.is_admin_reply ? 'border-2' : 'card')}
               style={r.is_admin_reply ? { borderColor: '#e9ae34', background: 'rgba(233,174,52,0.04)' } : {}}>
