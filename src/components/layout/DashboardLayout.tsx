@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { to: '/tests', icon: GraduationCap, label: 'Tests' },
   { to: '/progress', icon: BarChart3, label: 'Progress' },
   { to: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
-  { to: '/forum', icon: MessageSquare, label: 'Community' },
 ]
 
 const BOTTOM_NAV = [
