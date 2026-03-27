@@ -32,7 +32,14 @@ export default function Forum() {
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
     if (category !== 'all') q = q.eq('category', category)
-    const { data } = await q.limit(50)
+    const { data, error } = await q.limit(50)
+
+if (error) {
+  console.error(error)
+  setPosts([])
+  setLoading(false)
+  return
+}
     setPosts((data as ForumPostWithProfile[]) || [])
     setLoading(false)
   }
