@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageSquare, Plus, Pin, ChevronRight, Search, Loader2, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase, type ForumPost } from '../lib/supabase'
+import { supabase, type ForumPostWithProfile } from '../lib/supabase'
 import { timeAgo, cn } from '../lib/utils'
 import { toast } from 'sonner'
 
@@ -15,7 +15,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function Forum() {
   const { profile, isAdmin } = useAuth()
   const navigate = useNavigate()
-  const [posts, setPosts] = useState<ForumPost[]>([])
+  const [posts, setPosts] = useState<ForumPostWithProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
@@ -33,7 +33,7 @@ export default function Forum() {
       .order('created_at', { ascending: false })
     if (category !== 'all') q = q.eq('category', category)
     const { data } = await q.limit(50)
-    setPosts(data as ForumPost[] || [])
+    setPosts((data as ForumPostWithProfile[]) || [])
     setLoading(false)
   }
 
@@ -103,8 +103,8 @@ export default function Forum() {
       ) : (
         <div className="space-y-3">
           {filtered.map(post => {
-            const avatarColor = (post.profiles as any)?.avatar_color || '#1f3d5d'
-            const name = (post.profiles as any)?.full_name || 'Student'
+            const avatarColor = post.profiles?.avatar_color || '#1f3d5d'
+            const name = post.profiles?.full_name || 'Student'
             return (
               <div key={post.id} className="card-elevated rounded-2xl p-4 cursor-pointer" onClick={() => navigate(`/forum/${post.id}`)}>
                 <div className="flex items-start gap-3">
