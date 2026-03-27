@@ -19,8 +19,6 @@ const Progress = React.lazy(() => import('./pages/Progress'))
 const Leaderboard = React.lazy(() => import('./pages/Leaderboard'))
 const Profile = React.lazy(() => import('./pages/Profile'))
 const Settings = React.lazy(() => import('./pages/Settings'))
-const Forum = React.lazy(() => import('./pages/Forum'))
-const ForumPost = React.lazy(() => import('./pages/ForumPost'))
 
 // Admin pages
 const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'))
@@ -89,8 +87,6 @@ function AppRoutes() {
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/forum" element={<Forum />} />
-          <Route path="/forum/:id" element={<ForumPost />} />
         </Route>
 
         {/* Admin — role protected */}
