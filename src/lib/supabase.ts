@@ -242,3 +242,16 @@ export interface UserRole {
   role: AppRole
   created_at: string
 }
+// ─── Joined Types (for queries with relations) ───────────────────────────────
+
+// Minimal profile used in joins (DON’T use full Profile here)
+export type ProfileBasic = {
+  full_name: string | null
+  avatar_color: string | null
+}
+export type ForumPostWithProfile = ForumPost & {
+  profiles: ProfileBasic | null
+}
+export type ForumReplyWithProfile = ForumReply & {
+  profiles: ProfileBasic | null
+}
