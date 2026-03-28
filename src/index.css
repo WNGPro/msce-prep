@@ -1,38 +1,40 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
-/* ─── CSS Variables ─────────────────────────────────────────────────── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS Variables ──────────────────────────────────────────────────── */
 
 :root {
-  /* Brand */
   --navy:   #1f3d5d;
   --amber:  #e9ae34;
   --green:  #16a34a;
   --red:    #dc2626;
 
   /* Light mode */
-  --background:  #f5f7fa;
-  --surface:     #ffffff;
-  --surface-2:   #f0f2f5;
-  --border:      #e2e6ea;
+  --background:     #f5f7fa;
+  --surface:        #ffffff;
+  --surface-2:      #f0f2f5;
+  --border:         #e2e6ea;
   --text-primary:   #0d1a26;
   --text-secondary: #374151;
   --text-muted:     #6b7280;
 }
 
 .dark {
-  /* Dark mode — navy dominant, amber accent only */
-  --background:  #0d1a26;
-  --surface:     #132030;
-  --surface-2:   #1a2d40;
-  --border:      #243548;
+  --background:     #0d1a26;
+  --surface:        #132030;
+  --surface-2:      #1a2d40;
+  --border:         #243548;
   --text-primary:   #f0f4f8;
   --text-secondary: #a8bfd4;
   --text-muted:     #5a7a96;
 }
 
-/* ─── Reset ──────────────────────────────────────────────────────────── */
+/* ─── Base ───────────────────────────────────────────────────────────── */
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; }
 html { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
 
 body {
@@ -43,10 +45,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ─── Typography ─────────────────────────────────────────────────────── */
-
 .font-display { font-family: 'Space Grotesk', system-ui, sans-serif; }
-h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────── */
 
@@ -75,7 +74,6 @@ h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
   outline: none;
   transition: border-color 0.15s;
 }
-
 .input:focus { border-color: var(--amber); }
 .input::placeholder { color: var(--text-muted); }
 
@@ -94,12 +92,10 @@ h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
 @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
 @keyframes scaleIn { from { opacity: 0; transform: scale(0.95) } to { opacity: 1; transform: scale(1) } }
-@keyframes pulse   { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
 
 .animate-fade-in  { animation: fadeIn  0.2s ease-out both; }
 .animate-slide-up { animation: slideUp 0.25s ease-out both; }
 .animate-scale-in { animation: scaleIn 0.2s ease-out both; }
-.animate-pulse    { animation: pulse 1.4s ease-in-out infinite; }
 
 /* ─── Subject chips ──────────────────────────────────────────────────── */
 
@@ -118,15 +114,26 @@ h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
   transition: all 0.15s;
   text-align: left;
 }
-
 .subject-chip.selected {
   border-color: var(--amber);
   background: rgba(233, 174, 52, 0.08);
   color: var(--text-primary);
 }
 
-/* ─── Nav active state ───────────────────────────────────────────────── */
+/* ─── Nav ────────────────────────────────────────────────────────────── */
 
 .nav-link        { color: rgba(255,255,255,0.5); }
 .nav-link.active { color: var(--amber); }
 .nav-link:hover  { color: rgba(255,255,255,0.85); }
+
+/* ─── Badge ──────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.badge-accent { background: rgba(233,174,52,0.15); color: #b8861f; }
