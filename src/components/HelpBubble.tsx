@@ -1,273 +1,196 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Save, Loader2, Camera, Edit2, Check } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../contexts/AuthContext'
-import { SUBJECTS, AVATAR_COLORS, BANNER_PRESETS, cn } from '../lib/utils'
-import { xpToLevel, xpToNextLevel, levelTitle } from '../lib/useXP'
-import { toast } from 'sonner'
-import type { SubjectType } from '../lib/supabase'
+import React, { useState, useRef, useEffect } from 'react'
+import { X, HelpCircle, MessageCircle, BookOpen, Mail, ChevronDown, ChevronUp } from 'lucide-react'
 
-const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
-const DAY_LABELS: Record<string,string> = { monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun' }
+const FAQS = [
+  { q: 'How do MSCE grades work?', a: 'MSCE uses grades 1–9 per subject, where 1 is the highest. Your Division is calculated from your best 6 subjects — Division 1 is ≤9 points, Division 2 is 10–18, Division 3 is 19–27.' },
+  { q: 'How do I earn XP?', a: 'You earn XP by completing tests, reviewing flashcards, building decks, uploading papers, and logging in daily. Every 200 XP = 1 level.' },
+  { q: 'How does the streak work?', a: 'Your streak increases by 1 for every consecutive day you do any activity on the app. Miss a day and it resets to 1.' },
+  { q: 'Can I use the app offline?', a: 'Yes — papers you\'ve opened before are cached. Flashcard decks you\'ve built are saved locally and sync when you reconnect.' },
+  { q: 'How do I share a flashcard deck?', a: 'When building a deck in Create, toggle "Share with Library". It goes to admin review and appears publicly once approved.' },
+  { q: 'How do I report a problem?', a: 'Email wngplays@gmail.com with a description of the issue. Screenshots are helpful.' },
+]
 
-export default function Profile() {
-  const navigate = useNavigate()
-  const { user, profile, refreshProfile } = useAuth()
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
+export default function HelpBubble() {
+  const [open, setOpen] = useState(false)
+  const [hidden, setHidden] = useState(false)
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null)
+  const [pos, setPos] = useState({ x: 0, y: 0 })
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 })
+  const bubbleRef = useRef<HTMLButtonElement>(null)
+  const hasDragged = useRef(false)
 
-  const [fullName, setFullName] = useState('')
-  const [schoolName, setSchoolName] = useState('')
-  const [avatarColor, setAvatarColor] = useState('#1f3d5d')
-  const [bannerPreset, setBannerPreset] = useState('navy-wave')
-  const [testDay, setTestDay] = useState('saturday')
-  const [subjects, setSubjects] = useState<SubjectType[]>([])
-  const [prioritySubjects, setPrioritySubjects] = useState<SubjectType[]>([])
+  // Position bubble bottom-right on mount
+  useEffect(() => {
+    setPos({ x: window.innerWidth - 72, y: window.innerHeight - 120 })
+  }, [])
+
+  function onMouseDown(e: React.MouseEvent) {
+    hasDragged.current = false
+    setDragging(true)
+    dragStart.current = { x: e.clientX, y: e.clientY, px: pos.x, py: pos.y }
+    e.preventDefault()
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    hasDragged.current = false
+    setDragging(true)
+    const t = e.touches[0]
+    dragStart.current = { x: t.clientX, y: t.clientY, px: pos.x, py: pos.y }
+  }
 
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name || '')
-      setSchoolName(profile.school_name || '')
-      setAvatarColor(profile.avatar_color || '#1f3d5d')
-      setBannerPreset(profile.banner_preset || 'navy-wave')
-      setTestDay(profile.preferred_test_day || 'saturday')
-      setSubjects(profile.subjects || [])
-      setPrioritySubjects(profile.priority_subjects || [])
+    function onMouseMove(e: MouseEvent) {
+      if (!dragging) return
+      const dx = e.clientX - dragStart.current.x
+      const dy = e.clientY - dragStart.current.y
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasDragged.current = true
+      const newX = Math.max(0, Math.min(window.innerWidth - 56, dragStart.current.px + dx))
+      const newY = Math.max(0, Math.min(window.innerHeight - 56, dragStart.current.py + dy))
+      setPos({ x: newX, y: newY })
     }
-  }, [profile])
+    function onTouchMove(e: TouchEvent) {
+      if (!dragging) return
+      const t = e.touches[0]
+      const dx = t.clientX - dragStart.current.x
+      const dy = t.clientY - dragStart.current.y
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasDragged.current = true
+      const newX = Math.max(0, Math.min(window.innerWidth - 56, dragStart.current.px + dx))
+      const newY = Math.max(0, Math.min(window.innerHeight - 56, dragStart.current.py + dy))
+      setPos({ x: newX, y: newY })
+    }
+    function onUp() { setDragging(false) }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onUp)
+    }
+  }, [dragging])
 
-  const initial = (profile?.full_name || user?.email || 'S')[0].toUpperCase()
-  const banner = BANNER_PRESETS.find(b => b.value === (editing ? bannerPreset : profile?.banner_preset)) || BANNER_PRESETS[0]
-  const totalXP = profile?.total_xp || 0
-  const streak = profile?.current_streak || 0
-  const level = xpToLevel(totalXP)
-  const { current: xpCurrent, needed: xpNeeded, percent: xpPercent } = xpToNextLevel(totalXP)
-
-  const toggleSubject = (s: SubjectType) => {
-    setSubjects(prev => {
-      const next = prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
-      setPrioritySubjects(p => p.filter(x => next.includes(x)))
-      return next
-    })
+  function handleClick() {
+    if (hasDragged.current) return
+    setOpen(o => !o)
   }
 
-  const togglePriority = (s: SubjectType) => {
-    setPrioritySubjects(prev => {
-      if (prev.includes(s)) return prev.filter(x => x !== s)
-      if (prev.length >= 2) { toast.error('Max 2 priority subjects'); return prev }
-      return [...prev, s]
-    })
-  }
-
-  async function save() {
-    if (!user) return
-    if (!fullName.trim()) { toast.error('Name is required'); return }
-    if (subjects.length < 6) { toast.error('Select at least 6 subjects'); return }
-    setSaving(true)
-    const { error } = await supabase.from('profiles').update({
-      full_name: fullName.trim(),
-      school_name: schoolName.trim(),
-      avatar_color: avatarColor,
-      banner_preset: bannerPreset,
-      preferred_test_day: testDay,
-      subjects,
-      priority_subjects: prioritySubjects,
-    }).eq('user_id', user.id)
-    if (error) { toast.error('Failed to save'); setSaving(false); return }
-    await refreshProfile()
-    toast.success('Profile updated ✓')
-    setEditing(false)
-    setSaving(false)
+  if (hidden) {
+    return (
+      <button onClick={() => setHidden(false)}
+        className="fixed bottom-24 right-4 z-50 text-xs px-3 py-1.5 rounded-full font-medium"
+        style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+        ? Help
+      </button>
+    )
   }
 
   return (
-    <div className="min-h-screen pb-24" style={{ background: 'var(--background)' }}>
-      <div className="max-w-xl mx-auto">
+    <>
+      {/* Bubble */}
+      <button
+        ref={bubbleRef}
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+        onClick={handleClick}
+        className="fixed z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-transform"
+        style={{
+          left: pos.x,
+          top: pos.y,
+          background: open ? '#1f3d5d' : '#e9ae34',
+          cursor: dragging ? 'grabbing' : 'grab',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+          transform: open ? 'scale(0.95)' : 'scale(1)'
+        }}>
+        {open
+          ? <X size={20} color="white" />
+          : <HelpCircle size={22} color="#1f3d5d" />
+        }
+      </button>
 
-        {/* Banner */}
-        <div className="relative h-36 overflow-hidden" style={{ background: banner.gradient }}>
-          <div className="absolute inset-0" style={{ background: banner.gradient }} />
-          {editing && (
-            <div className="absolute inset-0 flex items-center justify-center gap-2 flex-wrap p-4"
-              style={{ background: 'rgba(0,0,0,0.4)' }}>
-              {BANNER_PRESETS.map(b => (
-                <button key={b.value} onClick={() => setBannerPreset(b.value)}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
-                  style={{
-                    background: bannerPreset === b.value ? '#e9ae34' : 'rgba(255,255,255,0.2)',
-                    color: bannerPreset === b.value ? '#1f3d5d' : 'white',
-                    outline: bannerPreset === b.value ? '2px solid white' : 'none'
-                  }}>
-                  {b.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Panel */}
+      {open && (
+        <div className="fixed z-40 rounded-3xl shadow-2xl overflow-hidden"
+          style={{
+            width: 'min(340px, calc(100vw - 32px))',
+            maxHeight: '70vh',
+            bottom: window.innerHeight - pos.y + 16,
+            right: window.innerWidth - pos.x - 56,
+            background: 'var(--surface)',
+            border: '1.5px solid var(--border)',
+          }}>
 
-        {/* Avatar + actions */}
-        <div className="px-4 relative">
-          <div className="flex items-end justify-between -mt-8 mb-4">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white border-4 shadow-lg"
-                style={{ background: editing ? avatarColor : profile?.avatar_color || '#1f3d5d', borderColor: 'var(--background)' }}>
-                {initial}
-              </div>
-              {editing && (
-                <div className="mt-2 flex gap-1.5 flex-wrap max-w-[160px]">
-                  {AVATAR_COLORS.map(c => (
-                    <button key={c.value} onClick={() => setAvatarColor(c.value)}
-                      className="w-6 h-6 rounded-full transition-all"
-                      style={{
-                        background: c.value,
-                        outline: avatarColor === c.value ? '2px solid #e9ae34' : 'none',
-                        outlineOffset: '2px',
-                        transform: avatarColor === c.value ? 'scale(0.85)' : 'scale(1)'
-                      }} />
-                  ))}
-                </div>
-              )}
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b"
+            style={{ borderColor: 'var(--border)', background: '#1f3d5d' }}>
+            <div className="flex items-center gap-2">
+              <HelpCircle size={16} color="#e9ae34" />
+              <span className="font-bold text-sm text-white">Help & Support</span>
             </div>
-            <button onClick={() => editing ? save() : setEditing(true)}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
-              style={{ background: editing ? '#e9ae34' : 'var(--surface)', color: editing ? '#1f3d5d' : 'var(--text-secondary)', border: editing ? 'none' : '1.5px solid var(--border)' }}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : editing ? <Check size={14} /> : <Edit2 size={14} />}
-              {saving ? 'Saving...' : editing ? 'Save Changes' : 'Edit Profile'}
+            <button onClick={() => setHidden(true)} className="text-xs px-2 py-1 rounded-lg"
+              style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}>
+              Hide
             </button>
           </div>
 
-          {/* Name + school */}
-          {editing ? (
-            <div className="grid gap-3 mb-5">
-              <div>
-                <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-muted)' }}>DISPLAY NAME</label>
-                <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your full name" />
-              </div>
-              <div>
-                <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-muted)' }}>SCHOOL</label>
-                <input className="input" value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="Your school name" />
-              </div>
-            </div>
-          ) : (
-            <div className="mb-5">
-              <h2 className="text-xl font-bold font-display" style={{ color: 'var(--text-primary)' }}>{profile?.full_name || 'Student'}</h2>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>🏫 {profile?.school_name || 'No school set'}</p>
-            </div>
-          )}
+          {/* Scrollable content */}
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(70vh - 52px)' }}>
 
-          {/* XP card */}
-          <div className="card rounded-2xl p-4 mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm"
-                  style={{ background: '#e9ae34', color: '#1f3d5d' }}>{level}</div>
-                <div>
-                  <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{levelTitle(level)}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{totalXP} XP · 🔥 {streak} day streak</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{xpCurrent}/{xpNeeded} XP</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>to Level {level + 1}</p>
-              </div>
+            {/* Quick links */}
+            <div className="p-3 grid grid-cols-2 gap-2 border-b" style={{ borderColor: 'var(--border)' }}>
+              <a href="mailto:wngplays@gmail.com"
+                className="flex items-center gap-2 p-3 rounded-xl text-xs font-medium"
+                style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>
+                <Mail size={14} style={{ color: '#e9ae34' }} /> Email Us
+              </a>
+              <a href="https://wa.me" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 p-3 rounded-xl text-xs font-medium"
+                style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>
+                <MessageCircle size={14} style={{ color: '#16a34a' }} /> WhatsApp
+              </a>
             </div>
-            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
-              <div className="h-full rounded-full" style={{ width: `${xpPercent}%`, background: 'linear-gradient(90deg, #e9ae34, #f5c842)' }} />
-            </div>
-          </div>
 
-          {/* Subjects */}
-          <div className="card rounded-2xl p-4 mb-4">
-            <p className="text-xs font-bold mb-3 tracking-wider" style={{ color: 'var(--text-muted)' }}>
-              SUBJECTS {editing && <span style={{ color: subjects.length >= 6 ? '#16a34a' : '#e9ae34' }}>({subjects.length} selected{subjects.length < 6 ? ` — need ${6 - subjects.length} more` : ' ✓'})</span>}
-            </p>
-            {editing ? (
-              <div className="grid grid-cols-2 gap-2">
-                {SUBJECTS.map(s => {
-                  const selected = subjects.includes(s.value)
-                  const isPriority = prioritySubjects.includes(s.value)
-                  return (
-                    <button key={s.value} onClick={() => toggleSubject(s.value)}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-left transition-all"
-                      style={{
-                        background: selected ? `${s.color}15` : 'var(--surface-2)',
-                        border: `1.5px solid ${selected ? s.color : 'var(--border)'}`,
-                        color: 'var(--text-primary)'
-                      }}>
-                      <span>{s.emoji}</span>
-                      <span className="flex-1 truncate text-xs">{s.label}</span>
-                      {selected && (
-                        <button onClick={e => { e.stopPropagation(); togglePriority(s.value) }}
-                          className="text-base" title="Set as priority">
-                          {isPriority ? '⭐' : '☆'}
-                        </button>
-                      )}
+            {/* FAQs */}
+            <div className="p-3">
+              <p className="text-xs font-bold mb-2 tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                FREQUENTLY ASKED
+              </p>
+              <div className="grid gap-1.5">
+                {FAQS.map((faq, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden"
+                    style={{ border: '1px solid var(--border)' }}>
+                    <button
+                      onClick={() => setExpandedFaq(expandedFaq === i ? null : i)}
+                      className="w-full flex items-center justify-between p-3 text-left"
+                      style={{ background: expandedFaq === i ? 'var(--surface-2)' : 'transparent' }}>
+                      <span className="text-xs font-semibold pr-2" style={{ color: 'var(--text-primary)' }}>
+                        {faq.q}
+                      </span>
+                      {expandedFaq === i
+                        ? <ChevronUp size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                        : <ChevronDown size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      }
                     </button>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {(profile?.subjects || []).map(sv => {
-                  const s = SUBJECTS.find(x => x.value === sv)
-                  const isPriority = (profile?.priority_subjects || []).includes(sv)
-                  return (
-                    <span key={sv} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
-                      style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: isPriority ? '1.5px solid #e9ae34' : '1.5px solid var(--border)' }}>
-                      {s?.emoji} {s?.label} {isPriority && '⭐'}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Test day */}
-          {editing && (
-            <div className="card rounded-2xl p-4 mb-4">
-              <p className="text-xs font-bold mb-3 tracking-wider" style={{ color: 'var(--text-muted)' }}>WEEKLY TEST DAY</p>
-              <div className="grid grid-cols-7 gap-1.5">
-                {DAYS.map(d => (
-                  <button key={d} onClick={() => setTestDay(d)}
-                    className="py-2.5 rounded-xl text-xs font-bold transition-all"
-                    style={testDay === d
-                      ? { background: '#1f3d5d', color: '#e9ae34' }
-                      : { background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>
-                    {DAY_LABELS[d]}
-                  </button>
+                    {expandedFaq === i && (
+                      <div className="px-3 pb-3">
+                        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{faq.a}</p>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Cancel button */}
-          {editing && (
-            <button onClick={() => { setEditing(false); }}
-              className="w-full py-3 rounded-2xl text-sm font-semibold mb-4"
-              style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1.5px solid var(--border)' }}>
-              Cancel
-            </button>
-          )}
-
-          {/* Stats when not editing */}
-          {!editing && (
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {[
-                { label: 'Tests', value: profile?.total_xp ? Math.floor(profile.total_xp / 50) : 0 },
-                { label: 'Best Streak', value: `${profile?.longest_streak || 0}d` },
-                { label: 'Level', value: level },
-              ].map(s => (
-                <div key={s.label} className="card rounded-2xl p-3 text-center">
-                  <p className="text-xl font-bold font-display" style={{ color: 'var(--text-primary)' }}>{s.value}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
-                </div>
-              ))}
+            <div className="px-3 pb-4 text-center">
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                MSCE Prep · Early Stage · Built in Malawi 🇲🇼
+              </p>
             </div>
-          )}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   )
 }
