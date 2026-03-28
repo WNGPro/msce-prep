@@ -1,181 +1,272 @@
-import React, { useState } from 'react'
-import { Edit2, Star, BookOpen, Settings as SettingsIcon, Award, Check, Loader2 } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
-import { AVATAR_COLORS, BANNER_PRESETS, SUBJECTS, getSubject, formatDate, cn } from '../lib/utils'
-import { toast } from 'sonner'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Save, Loader2, Camera, Edit2, Check } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { SUBJECTS, AVATAR_COLORS, BANNER_PRESETS, cn } from '../lib/utils'
+import { xpToLevel, xpToNextLevel, levelTitle } from '../lib/useXP'
+import { toast } from 'sonner'
+import type { SubjectType } from '../lib/supabase'
 
-const BADGES = [
-  { id: 'first_steps', label: 'First Steps', emoji: '👣', desc: 'Complete your first test', condition: (tests: number) => tests >= 1 },
-  { id: 'week_warrior', label: 'Week Warrior', emoji: '🔥', desc: 'Complete 7 tests in a week', condition: (tests: number) => tests >= 7 },
-  { id: 'paper_master', label: 'Paper Master', emoji: '📄', desc: 'View 10 past papers', condition: (tests: number) => tests >= 10 },
-  { id: 'perfect_score', label: 'Perfect Score', emoji: '💯', desc: 'Score 100% on any test', condition: () => false },
-  { id: 'contributor', label: 'Contributor', emoji: '🤝', desc: 'Upload an approved paper', condition: () => false },
-  { id: 'top_student', label: 'Top Student', emoji: '🏆', desc: 'Reach top 10 on leaderboard', condition: () => false },
-  { id: 'streak_master', label: 'Streak Master', emoji: '⚡', desc: 'Maintain a 30-day streak', condition: () => false },
-  { id: 'builder', label: 'Builder', emoji: '🔨', desc: 'Create 5 flashcards', condition: () => false },
-  { id: 'pioneer', label: 'Pioneer', emoji: '🌟', desc: 'One of the first 100 users', condition: () => false },
-]
+const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+const DAY_LABELS: Record<string,string> = { monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',friday:'Fri',saturday:'Sat',sunday:'Sun' }
 
 export default function Profile() {
-  const { profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<'badges' | 'subjects' | 'edit'>('badges')
+  const { user, profile, refreshProfile } = useAuth()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    full_name: profile?.full_name || '',
-    school_name: profile?.school_name || '',
-    avatar_color: profile?.avatar_color || '#1f3d5d',
-    banner_preset: profile?.banner_preset || 'navy-wave',
-  })
 
-  const banner = BANNER_PRESETS.find(b => b.value === (editing ? form.banner_preset : profile?.banner_preset)) || BANNER_PRESETS[0]
-  const avatarColor = editing ? form.avatar_color : (profile?.avatar_color || '#1f3d5d')
-  const initial = (profile?.full_name || 'U')[0].toUpperCase()
+  const [fullName, setFullName] = useState('')
+  const [schoolName, setSchoolName] = useState('')
+  const [avatarColor, setAvatarColor] = useState('#1f3d5d')
+  const [bannerPreset, setBannerPreset] = useState('navy-wave')
+  const [testDay, setTestDay] = useState('saturday')
+  const [subjects, setSubjects] = useState<SubjectType[]>([])
+  const [prioritySubjects, setPrioritySubjects] = useState<SubjectType[]>([])
 
-  const saveProfile = async () => {
-    if (!profile) return
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '')
+      setSchoolName(profile.school_name || '')
+      setAvatarColor(profile.avatar_color || '#1f3d5d')
+      setBannerPreset(profile.banner_preset || 'navy-wave')
+      setTestDay(profile.preferred_test_day || 'saturday')
+      setSubjects(profile.subjects || [])
+      setPrioritySubjects(profile.priority_subjects || [])
+    }
+  }, [profile])
+
+  const initial = (profile?.full_name || user?.email || 'S')[0].toUpperCase()
+  const banner = BANNER_PRESETS.find(b => b.value === (editing ? bannerPreset : profile?.banner_preset)) || BANNER_PRESETS[0]
+  const totalXP = profile?.total_xp || 0
+  const streak = profile?.current_streak || 0
+  const level = xpToLevel(totalXP)
+  const { current: xpCurrent, needed: xpNeeded, percent: xpPercent } = xpToNextLevel(totalXP)
+
+  const toggleSubject = (s: SubjectType) => {
+    setSubjects(prev => {
+      const next = prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+      setPrioritySubjects(p => p.filter(x => next.includes(x)))
+      return next
+    })
+  }
+
+  const togglePriority = (s: SubjectType) => {
+    setPrioritySubjects(prev => {
+      if (prev.includes(s)) return prev.filter(x => x !== s)
+      if (prev.length >= 2) { toast.error('Max 2 priority subjects'); return prev }
+      return [...prev, s]
+    })
+  }
+
+  async function save() {
+    if (!user) return
+    if (!fullName.trim()) { toast.error('Name is required'); return }
+    if (subjects.length < 6) { toast.error('Select at least 6 subjects'); return }
     setSaving(true)
     const { error } = await supabase.from('profiles').update({
-      full_name: form.full_name,
-      school_name: form.school_name,
-      avatar_color: form.avatar_color,
-      banner_preset: form.banner_preset,
-    }).eq('user_id', profile.user_id)
-    if (error) { toast.error(error.message); setSaving(false); return }
+      full_name: fullName.trim(),
+      school_name: schoolName.trim(),
+      avatar_color: avatarColor,
+      banner_preset: bannerPreset,
+      preferred_test_day: testDay,
+      subjects,
+      priority_subjects: prioritySubjects,
+    }).eq('user_id', user.id)
+    if (error) { toast.error('Failed to save'); setSaving(false); return }
     await refreshProfile()
+    toast.success('Profile updated ✓')
     setEditing(false)
-    toast.success('Profile updated!')
     setSaving(false)
   }
 
   return (
-    <div className="max-w-3xl mx-auto animate-fade-in">
-      {/* Banner */}
-      <div className="relative h-36 lg:h-48" style={{ background: banner.gradient }}>
-        {editing && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="grid grid-cols-4 gap-2 p-3 rounded-2xl" style={{ background: 'rgba(0,0,0,0.5)' }}>
+    <div className="min-h-screen pb-24" style={{ background: 'var(--background)' }}>
+      <div className="max-w-xl mx-auto">
+
+        {/* Banner */}
+        <div className="relative h-36 overflow-hidden" style={{ background: banner.gradient }}>
+          <div className="absolute inset-0" style={{ background: banner.gradient }} />
+          {editing && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 flex-wrap p-4"
+              style={{ background: 'rgba(0,0,0,0.4)' }}>
               {BANNER_PRESETS.map(b => (
-                <button key={b.value} onClick={() => setForm(f => ({ ...f, banner_preset: b.value }))}
-                  className={cn('w-12 h-8 rounded-lg overflow-hidden border-2 transition-all', form.banner_preset === b.value ? 'border-white scale-110' : 'border-transparent')}>
-                  <div className="w-full h-full" style={{ background: b.gradient }} />
+                <button key={b.value} onClick={() => setBannerPreset(b.value)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                  style={{
+                    background: bannerPreset === b.value ? '#e9ae34' : 'rgba(255,255,255,0.2)',
+                    color: bannerPreset === b.value ? '#1f3d5d' : 'white',
+                    outline: bannerPreset === b.value ? '2px solid white' : 'none'
+                  }}>
+                  {b.label}
                 </button>
               ))}
-            </div>
-          </div>
-        )}
-        <button onClick={() => { setEditing(!editing); setTab('edit') }}
-          className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
-          style={{ background: 'rgba(0,0,0,0.5)', color: 'white' }}>
-          <Edit2 size={12} /> {editing ? 'Cancel' : 'Edit Profile'}
-        </button>
-      </div>
-
-      {/* Avatar */}
-      <div className="px-4 lg:px-6">
-        <div className="flex items-end justify-between -mt-8 mb-4">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full border-4 border-[var(--background)] flex items-center justify-center text-3xl font-bold"
-              style={{ background: avatarColor, color: 'white' }}>
-              {initial}
-            </div>
-            {editing && (
-              <div className="absolute -bottom-2 -right-2 grid grid-cols-3 gap-1 p-1.5 rounded-xl shadow-xl" style={{ background: 'var(--surface)' }}>
-                {AVATAR_COLORS.map(c => (
-                  <button key={c.value} onClick={() => setForm(f => ({ ...f, avatar_color: c.value }))}
-                    className={cn('w-6 h-6 rounded-full border-2 transition-all', form.avatar_color === c.value ? 'border-amber-400 scale-110' : 'border-transparent')}
-                    style={{ background: c.value }} />
-                ))}
-              </div>
-            )}
-          </div>
-          {profile?.is_premium && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold" style={{ background: 'rgba(233,174,52,0.15)', color: '#92600a' }}>
-              <Star size={12} className="text-amber-500 fill-current" /> Premium
             </div>
           )}
         </div>
 
-        {editing ? (
-          <div className="space-y-3 mb-4">
-            <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} className="input w-full" placeholder="Full name" />
-            <input value={form.school_name} onChange={e => setForm(f => ({ ...f, school_name: e.target.value }))} className="input w-full" placeholder="School name" />
-            <button onClick={saveProfile} disabled={saving} className="btn btn-accent px-6 py-2.5 font-bold">
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <><Check size={14} /> Save Changes</>}
-            </button>
-          </div>
-        ) : (
-          <div className="mb-4">
-            <h1 className="text-xl font-bold font-display" style={{ color: 'var(--text-primary)' }}>{profile?.full_name || 'Student'}</h1>
-            <div className="flex items-center gap-3 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-              {profile?.school_name && <span>🏫 {profile.school_name}</span>}
-              <span>📅 Joined {formatDate(profile?.created_at || '')}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="flex rounded-xl p-1 mb-6 w-fit" style={{ background: 'var(--surface-2)' }}>
-          {(['badges', 'subjects'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={cn('px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize', tab === t ? 'bg-white shadow-sm dark:bg-navy-700' : 'text-[var(--text-muted)]')}
-              style={tab === t ? { color: 'var(--text-primary)' } : {}}>
-              {t}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'badges' && (
-          <div className="grid grid-cols-3 gap-3 pb-8">
-            {BADGES.map(badge => {
-              const earned = badge.condition(0)
-              return (
-                <div key={badge.id} className={cn('card rounded-2xl p-4 text-center', !earned && 'opacity-40')}>
-                  <div className="text-3xl mb-2">{badge.emoji}</div>
-                  <div className="font-semibold text-xs font-display" style={{ color: 'var(--text-primary)' }}>{badge.label}</div>
-                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{badge.desc}</div>
+        {/* Avatar + actions */}
+        <div className="px-4 relative">
+          <div className="flex items-end justify-between -mt-8 mb-4">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white border-4 shadow-lg"
+                style={{ background: editing ? avatarColor : profile?.avatar_color || '#1f3d5d', borderColor: 'var(--background)' }}>
+                {initial}
+              </div>
+              {editing && (
+                <div className="mt-2 flex gap-1.5 flex-wrap max-w-[160px]">
+                  {AVATAR_COLORS.map(c => (
+                    <button key={c.value} onClick={() => setAvatarColor(c.value)}
+                      className="w-6 h-6 rounded-full transition-all"
+                      style={{
+                        background: c.value,
+                        outline: avatarColor === c.value ? '2px solid #e9ae34' : 'none',
+                        outlineOffset: '2px',
+                        transform: avatarColor === c.value ? 'scale(0.85)' : 'scale(1)'
+                      }} />
+                  ))}
                 </div>
-              )
-            })}
+              )}
+            </div>
+            <button onClick={() => editing ? save() : setEditing(true)}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+              style={{ background: editing ? '#e9ae34' : 'var(--surface)', color: editing ? '#1f3d5d' : 'var(--text-secondary)', border: editing ? 'none' : '1.5px solid var(--border)' }}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : editing ? <Check size={14} /> : <Edit2 size={14} />}
+              {saving ? 'Saving...' : editing ? 'Save Changes' : 'Edit Profile'}
+            </button>
           </div>
-        )}
 
-        {tab === 'subjects' && (
-          <div className="pb-8">
-            {(profile?.priority_subjects?.length ?? 0) > 0 && (
-              <div className="mb-4">
-                <h3 className="font-semibold text-sm mb-2" style={{ color: 'var(--text-muted)' }}>PRIORITY SUBJECTS</h3>
-                <div className="flex flex-wrap gap-2">
-                  {(profile?.priority_subjects ?? []).map(sv => {
-                    const s = getSubject(sv)
-                    return (
-                      <div key={sv} className="flex items-center gap-2 px-3 py-2 rounded-xl border" style={{ background: `${s.color}10`, borderColor: `${s.color}40` }}>
-                        <span>{s.emoji}</span>
-                        <span className="text-sm font-medium" style={{ color: s.color }}>{s.label}</span>
-                        <Star size={12} className="fill-current" style={{ color: s.color }} />
-                      </div>
-                    )
-                  })}
+          {/* Name + school */}
+          {editing ? (
+            <div className="grid gap-3 mb-5">
+              <div>
+                <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-muted)' }}>DISPLAY NAME</label>
+                <input className="input" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your full name" />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-muted)' }}>SCHOOL</label>
+                <input className="input" value={schoolName} onChange={e => setSchoolName(e.target.value)} placeholder="Your school name" />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-5">
+              <h2 className="text-xl font-bold font-display" style={{ color: 'var(--text-primary)' }}>{profile?.full_name || 'Student'}</h2>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>🏫 {profile?.school_name || 'No school set'}</p>
+            </div>
+          )}
+
+          {/* XP card */}
+          <div className="card rounded-2xl p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm"
+                  style={{ background: '#e9ae34', color: '#1f3d5d' }}>{level}</div>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{levelTitle(level)}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{totalXP} XP · 🔥 {streak} day streak</p>
                 </div>
               </div>
-            )}
-            <h3 className="font-semibold text-sm mb-2" style={{ color: 'var(--text-muted)' }}>ALL SUBJECTS</h3>
-            <div className="flex flex-wrap gap-2">
-              {(profile?.subjects || []).map(sv => {
-                const s = getSubject(sv)
-                return (
-                  <div key={sv} className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--surface-2)', color: 'var(--text-primary)' }}>
-                    <span>{s.emoji}</span>
-                    <span className="text-sm">{s.label}</span>
-                  </div>
-                )
-              })}
+              <div className="text-right">
+                <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{xpCurrent}/{xpNeeded} XP</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>to Level {level + 1}</p>
+              </div>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+              <div className="h-full rounded-full" style={{ width: `${xpPercent}%`, background: 'linear-gradient(90deg, #e9ae34, #f5c842)' }} />
             </div>
           </div>
-        )}
+
+          {/* Subjects */}
+          <div className="card rounded-2xl p-4 mb-4">
+            <p className="text-xs font-bold mb-3 tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              SUBJECTS {editing && <span style={{ color: subjects.length >= 6 ? '#16a34a' : '#e9ae34' }}>({subjects.length} selected{subjects.length < 6 ? ` — need ${6 - subjects.length} more` : ' ✓'})</span>}
+            </p>
+            {editing ? (
+              <div className="grid grid-cols-2 gap-2">
+                {SUBJECTS.map(s => {
+                  const selected = subjects.includes(s.value)
+                  const isPriority = prioritySubjects.includes(s.value)
+                  return (
+                    <button key={s.value} onClick={() => toggleSubject(s.value)}
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-left transition-all"
+                      style={{
+                        background: selected ? `${s.color}15` : 'var(--surface-2)',
+                        border: `1.5px solid ${selected ? s.color : 'var(--border)'}`,
+                        color: 'var(--text-primary)'
+                      }}>
+                      <span>{s.emoji}</span>
+                      <span className="flex-1 truncate text-xs">{s.label}</span>
+                      {selected && (
+                        <button onClick={e => { e.stopPropagation(); togglePriority(s.value) }}
+                          className="text-base" title="Set as priority">
+                          {isPriority ? '⭐' : '☆'}
+                        </button>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(profile?.subjects || []).map(sv => {
+                  const s = SUBJECTS.find(x => x.value === sv)
+                  const isPriority = (profile?.priority_subjects || []).includes(sv)
+                  return (
+                    <span key={sv} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
+                      style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: isPriority ? '1.5px solid #e9ae34' : '1.5px solid var(--border)' }}>
+                      {s?.emoji} {s?.label} {isPriority && '⭐'}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Test day */}
+          {editing && (
+            <div className="card rounded-2xl p-4 mb-4">
+              <p className="text-xs font-bold mb-3 tracking-wider" style={{ color: 'var(--text-muted)' }}>WEEKLY TEST DAY</p>
+              <div className="grid grid-cols-7 gap-1.5">
+                {DAYS.map(d => (
+                  <button key={d} onClick={() => setTestDay(d)}
+                    className="py-2.5 rounded-xl text-xs font-bold transition-all"
+                    style={testDay === d
+                      ? { background: '#1f3d5d', color: '#e9ae34' }
+                      : { background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1.5px solid var(--border)' }}>
+                    {DAY_LABELS[d]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Cancel button */}
+          {editing && (
+            <button onClick={() => { setEditing(false); }}
+              className="w-full py-3 rounded-2xl text-sm font-semibold mb-4"
+              style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1.5px solid var(--border)' }}>
+              Cancel
+            </button>
+          )}
+
+          {/* Stats when not editing */}
+          {!editing && (
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {[
+                { label: 'Tests', value: profile?.total_xp ? Math.floor(profile.total_xp / 50) : 0 },
+                { label: 'Best Streak', value: `${profile?.longest_streak || 0}d` },
+                { label: 'Level', value: level },
+              ].map(s => (
+                <div key={s.label} className="card rounded-2xl p-3 text-center">
+                  <p className="text-xl font-bold font-display" style={{ color: 'var(--text-primary)' }}>{s.value}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
